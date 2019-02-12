@@ -1,0 +1,21 @@
+first commit in my personal computer:
+
+git init 
+git remote add origin <link>
+
+git pull --rebase origin master
+git add .
+git commit
+git push -u origin master
+
+
+突破github的文件大小限制添加大文件:
+https://git-lfs.github.com/
+
+git lfs install
+git lfs track "*.pdf" // or any you want to add
+git add .gitattributes
+
+正常git提交操作流程
+
+

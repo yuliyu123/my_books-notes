@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<!-- saved from url=(0082)http://matt.might.net/articles/c++-template-meta-programming-with-lambda-calculus/ -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+ <title>C++ template programming: Embedding the lambda-calculus to show Turing-completeness</title>
+
+ <link rel="alternate" type="application/rss+xml" title="RSS" href="http://matt.might.net/articles/feed.rss">
+
+ <link rel="stylesheet" href="./C++ template programming_ Embedding the lambda-calculus to show Turing-completeness_files/raised-paper-2.css"> 
+
+
+ <meta name="viewport" content="width=480, initial-scale=1">
+ <link rel="stylesheet" media="screen and (max-device-width: 480px)" href="./C++ template programming_ Embedding the lambda-calculus to show Turing-completeness_files/raised-paper-2-handheld.css">
+
+ <script type="text/javascript" src="./C++ template programming_ Embedding the lambda-calculus to show Turing-completeness_files/matt.might.js.下载"></script>
+ <script type="text/javascript">
+  var ArticleVersion = 2 ;
+ </script>
+ <script>
+ <!--
+  include("article-style.js");
+ //-->
+ </script><script src="./C++ template programming_ Embedding the lambda-calculus to show Turing-completeness_files/article-style.js.下载"></script>
+ <script type="text/javascript" src="./C++ template programming_ Embedding the lambda-calculus to show Turing-completeness_files/manifest.js.下载"></script>
+ <script type="text/javascript" src="./C++ template programming_ Embedding the lambda-calculus to show Turing-completeness_files/index-manifest.js.下载"></script>
+
+ <script type="text/javascript">
+ <!--
+//  var Key = "[an error occurred while processing the directive]";
+ var Pathname = location.pathname ;
+ var PathParts = Pathname.split(/\//) ;
+ var Key = PathParts[PathParts.length-1] ;
+ if (Key == "")
+  Key = PathParts[PathParts.length-2] ;
+ //-->
+ </script>
+
+</head>
+
+
+
+<body>
+
+<div id="body">
+
+
+
+
+
+
+
+<div class="navlinks"><b>Latest:</b> <a href="http://matt.might.net/articles/tenure/">HOWTO: Get tenure</a><br><b>Next:</b> <a href="http://matt.might.net/articles/implementation-of-scheme-vector-struct-in-syntax-rules/">Fast vector-structs in Scheme from syntax-rules</a><br><b>Prev:</b> <a href="http://matt.might.net/articles/implementation-of-lazy-list-streams-in-scala/">Lazy-list-based streams in Scala</a><br><b>Rand:</b> <a href="http://matt.might.net/articles/closure-conversion/">Closure conversion: How to compile lambda </a></div><div id="abstract-container" class="module">
+<div id="abstract-content" class="fat-content">
+
+ <h1>C++ templates: Creating a compile-time higher-order meta-programming language</h1>
+
+ <div>
+ [<a href="http://matt.might.net/articles/">article index</a>]
+ [<script>
+       var emailMatt = '<a href="mai'+'lto:matt-blog'+'@'+'migh'+'t.net">email me</a>'
+document.write(emailMatt);
+ //-->
+</script><a href="mailto:matt-blog@might.net">email me</a>] 
+ [<a href="http://twitter.com/mattmight">@mattmight</a>]
+ [<a href="http://matt.might.net/articles/feed.rss">rss</a>]
+ </div>
+
+ 
+<p> For the Halloween lecture in my <a href="http://matt.might.net/teaching/advanced-compilers/">advanced compilers</a> class, I
+scare students with C++ template meta-programming.
+</p>
+
+<p>
+To prove that C++ templates are Turing-complete, we constructed a
+higher-order functional programming language out of them.
+</p>
+
+<p>
+The language supports higher-order functions, literal values (raw
+types), natural numbers (as types), booleans and conditionals.
+</p>
+
+<p>
+Specifically, we made an <a href="http://www.amazon.com/gp/product/0262510871/ref=as_li_ss_tl?ie=UTF8&amp;camp=1789&amp;creative=390957&amp;creativeASIN=0262510871&amp;linkCode=as2&amp;tag=ucmbread-20">SICP</a>-like
+eval/apply interpeter out of templates.
+</p>
+
+<p> This embedded language shows that any computable function can be computed
+at compile-time in C++.  </p>
+
+
+
+
+
+
+  
+</div> <!-- /#content -->
+</div> <!-- /#content-container -->
+
+
+
+
+  
+<div id="content-container" class="module">
+<div id="article-content">
+
+  <h2>How: Template specialization</h2>
+
+
+<p> The Turing-completeness of templates in C++ is an accident arising
+from the collision of two features: templates and template specialization.
+</p>
+
+<p>
+These two features allow C++ templates to act like an untyped
+term-rewriting language.
+</p>
+
+<p>
+A template declares a data type parameterized by some constants and by some types; for example:
+</p>
+<pre>template &lt;typename A&gt;
+struct ListNode
+{
+  A data ;
+  ListNode&lt;A&gt;* next ;
+} ; 
+</pre>
+
+<p>
+A template specialization allows the programmer to override the
+definition of a template for some combination of template parameters.
+</p>
+
+<p>
+For example, we could override the definition of <code>ListNode</code>
+when parameterized with the type <code>unsigned int</code>:
+</p>
+
+<pre>template &lt;&gt;
+struct ListNode&lt;unsigned int&gt;
+{
+  /* Don't let them use unsigned ints. */
+  int data ;
+  ListNode&lt;int&gt;* next ;
+} ;
+</pre>
+
+<p>
+The standard example of why you would want to specialize is so that
+you could have <code>Vector&lt;bool&gt;</code> implemented as a true
+bit-vector, instead of wasting one word per element.
+</p>
+
+
+
+
+<h2>Factorial example</h2>
+<p>
+The canonical example of compile-time computation is factorial in
+templates:
+</p>
+
+<pre>template &lt;int N&gt;
+struct Factorial 
+{
+  enum { value = N * Factorial&lt;N-1&gt;::value };
+};
+ 
+template &lt;&gt;
+struct Factorial&lt;0&gt; 
+{
+  enum { value = 1 } ;
+};
+</pre>
+
+<p>
+Without the template specialization, a reference to
+<code>Factorial&lt;4&gt;::value</code> would re-write itself forever,
+eventually causing the template equivalent of a stack overflow.
+</p>
+
+<p>
+Note the use of enumerations to force compile-time evaluation of the member constant <code>value</code>.
+</p>
+
+<p>
+With this template in place, code could refer to
+<code>Factorial&lt;4&gt;::value</code> and get <code>24</code> computed at
+compile-time.
+</p>
+
+
+
+
+<h2>Encoding and pattern-matching data structures</h2>
+
+<p> In C++ template meta-programming, types are used to encode
+structured data, and specializations are used to destructure that data
+with pattern-matching.
+</p>
+
+<p>
+For example, we could encode the natural numbers using a
+<code>Zero</code> type, and a <code>Succ&lt;<i>Number</i>&gt;</code> template
+type:
+</p>
+
+<pre>struct Zero 
+{
+  enum { value = 0 } ;
+} ;
+
+template &lt;typename N&gt;
+struct Succ 
+{
+  enum { value = N::value + 1 } ;
+} ;
+</pre>
+
+<p>
+We could then make a template that matches the value 1 encoded as
+<code>Succ&lt;Zero&gt;</code>:
+</p>
+
+<pre>template &lt;typename N&gt;
+struct MatchOne
+{
+  enum { value = 0 } ;
+} ;
+
+
+template &lt;&gt;
+struct MatchOne&lt;Succ&lt;Zero&gt; &gt;
+{
+  enum { value = 1 } ;
+} ;
+</pre>
+
+<p>
+so that the following code works:
+</p>
+
+<pre>cout &lt;&lt; MatchOne&lt;Zero &gt;::value &lt;&lt; endl; 
+// Prints: 0
+
+cout &lt;&lt; MatchOne&lt;Succ&lt;Zero&gt; &gt;::value &lt;&lt; endl; 
+// Prints: 1
+
+cout &lt;&lt; MatchOne&lt;Succ&lt;Succ&lt;Zero&gt; &gt; &gt;::value &lt;&lt; endl; 
+// Prints: 0
+</pre>
+
+
+
+<h2>Proving Turing-completeness</h2>
+
+<p> To prove Turing-completeness, we have to show that C++ templates
+can be implemented by a Turing machine (gcc takes care of this), and
+that C++ templates can implement a Turing machine.
+</p>
+
+<p>
+It's well known that the λ-calculus (which actually predates the
+Turing machine) is Turing-complete, so just have to show that C++
+templates can implement the λ-calculus.
+</p>
+
+<p>
+In fact, in an effort to make this (a little) more than a toy exercise,
+the evaluator can handle conditionals, booleans and literal values
+too.
+</p>
+
+<p>
+One could actually do some programming with this language.
+</p>
+
+
+<p>
+The commented code below explains how this is done.
+</p>
+
+<p>
+We don't have to utilize much of the C++ language to
+pull this off.
+</p>
+
+<p>
+We don't need templates that generate templates, embedded templates or
+even templates that accept templates.
+</p>
+
+<p>
+We use templates, template specialization, <code>struct</code>,
+<code>typename</code> and <code>typedef</code>.
+</p>
+
+<p>
+And, it's <a href="http://matt.might.net/articles/c++-template-meta-programming-with-lambda-calculus/code/lambda-calculus-in-templates.cpp">barely 200 lines of code with comments included</a>.
+</p>
+
+
+<h2>An abstract syntax in templates</h2>
+
+<p>
+We'll use integers for variables names (although we can easily provide aliases for them).
+</p>
+
+<p>
+We need to use instantiated template types to represent program terms:
+</p>
+
+<pre>// Anonymous functions:
+template <int formalname,typename="" body="">
+struct Lambda {} ;
+
+// Function call/Application:
+template <typename fun,="" typename="" arg="">
+struct App {} ; 
+
+// References:
+template <int name="">
+struct Ref {} ;
+
+// Conditionals:
+template <typename cond,="" typename="" then,="" else="">
+struct If {} ;
+
+// Literals:
+template <typename t="">
+struct Lit {} ;
+</typename></typename></int></typename></int></pre>
+
+
+<h2>Environments as templates</h2>
+
+<p>
+Environments, which map names to values,
+are type-level linked lists:
+</p>
+
+<pre>// EmptyEnv is the empty environment:
+struct EmptyEnv ;
+
+// Bindings&lt;Name,Value,Env&gt; is a type than encodes the environment Env
+// extended with a binding for Name =&gt; Value:
+template &lt;int Name, typename Value, typename Env&gt;
+struct Binding {} ;
+</pre>
+
+<p> The template metafunction <code>EnvLookup</code> accepts a name and an environment
+to yield a value: </p>
+
+<pre>// EnvLookup&lt;Name,Env&gt; :: result looks up the value of Name in Env:
+template &lt;int Name, typename Env&gt;
+struct EnvLookup {} ;
+
+template &lt;int Name&gt;
+struct EnvLookup &lt;Name,EmptyEnv&gt; {} ; // Name not found.
+
+template &lt;int Name, typename Value, typename Env&gt;
+struct EnvLookup &lt;Name, Binding&lt;Name,Value,Env&gt; &gt; 
+{
+  Value typedef result ;
+} ;
+
+template &lt;int Name, int Name2, typename Value2, typename Env&gt;
+struct EnvLookup &lt;Name, Binding&lt;Name2,Value2,Env&gt; &gt;
+{
+  typename EnvLookup&lt;Name,Env&gt; :: result typedef result ;
+} ;
+</pre>
+
+<p>
+<code>EnvLookup</code> illustrates an important convention: 
+to define a type-level meta-function, we <code>typedef</code> its
+return value to the field <code>result</code>.
+</p>
+
+<p>
+Accessing the field <code>result</code> forces the expansion
+and yields the return value.
+</p>
+
+
+<h2>Type-level values</h2>
+
+<p>
+Of course, run-time "values" in a template meta-program are actually types:
+</p>
+
+<pre>// Closures:
+template <typename lam,="" typename="" env="">
+struct Closure {} ;
+
+// Booleans:
+struct True {} ;
+struct False {} ;
+</typename></pre>
+
+
+<h2>Eval and apply as meta-functions</h2>
+
+<p>
+Finally, we define eval and apply as type-level meta-functions:
+</p>
+
+<pre>// Eval&lt;Exp,Env&gt; :: result is the value of expression Exp in
+// environment Env.
+template &lt;typename Exp, typename Env&gt;
+struct Eval {} ;
+
+// Apply&lt;Proc,Value&gt; :: result is the value of applying Proc to Value.
+template &lt;typename Proc, typename Value&gt;
+struct Apply {} ;
+
+
+
+// Literals evaluate to themselves:
+template &lt;typename T, typename Env&gt;
+struct Eval &lt;Lit&lt;T&gt;, Env&gt;
+{
+  T typedef result ;
+} ;
+
+// Variable references are looked up in the current environment:
+template &lt;int Name, typename Env&gt;
+struct Eval &lt;Ref&lt;Name&gt;, Env&gt;
+{
+  typename EnvLookup&lt;Name, Env&gt; :: result typedef result ;
+} ;
+
+// Lambda terms evaluate into closures:
+template &lt;int Name, typename Body, typename Env&gt;
+struct Eval &lt;Lambda&lt;Name,Body&gt;, Env&gt;
+{
+  Closure&lt;Lambda&lt;Name, Body&gt;, Env&gt; typedef result ;
+} ;
+
+// Applications apply the value of the function expression to the
+// value of the argument expression:
+template &lt;typename Fun, typename Arg, typename Env&gt;
+struct Eval&lt;App&lt;Fun, Arg&gt; , Env&gt; {
+  typename Apply&lt;typename Eval&lt;Fun,Env&gt; :: result ,
+                 typename Eval&lt;Arg,Env&gt; :: result &gt; :: result 
+           typedef result ;
+} ;
+
+// Branch true:
+template &lt;typename Then, typename Else, typename Env&gt;
+struct Eval&lt;If&lt;True,Then,Else&gt;,Env&gt; {
+  typename Eval&lt;Then,Env&gt; :: result typedef result ;
+} ;
+
+// Branch false:
+template &lt;typename Then, typename Else, typename Env&gt;
+struct Eval&lt;If&lt;False,Then,Else&gt;,Env&gt; {
+  typename Eval&lt;Else,Env&gt; :: result typedef result ;
+} ;
+
+// Evaluate the condition:
+template &lt;typename Cond, typename Then, typename Else, typename Env&gt;
+struct Eval&lt;If&lt;Cond,Then,Else&gt;,Env&gt; {
+  typename Eval&lt;If&lt;typename Eval&lt;Cond,Env&gt; :: result, 
+                   Then,
+                   Else&gt;,
+                Env&gt; :: result 
+           typedef result ;
+} ;
+
+
+// Transition to the body of the lambda term inside the closure:
+template &lt;int Name, typename Body, typename Env, typename Value&gt;
+struct Apply&lt;Closure&lt;Lambda&lt;Name,Body&gt;, Env&gt;, Value&gt; {
+  typename Eval&lt;Body, Binding&lt;Name,Value,Env&gt; &gt; :: result 
+           typedef result ;
+} ;
+</pre>
+
+
+
+<h2>All together</h2>
+
+<p>
+Now, we can construct and execute simple template meta-programs:
+</p>
+
+<pre>  // Testing ((lambda (x) x) 2):
+  enum { X } ;
+  
+  int x = Eval&lt;App&lt;Lambda&lt;X,Ref&lt;X&gt; &gt;,Lit&lt;Succ&lt;Succ&lt;Zero&gt;
+     &gt; &gt; &gt;,EmptyEnv&gt; :: result :: value ;
+
+  assert(x == 2) ;
+
+
+  // Testing (if #f 0 1):
+  int y = Eval&lt;If&lt;Lit&lt;False&gt;,Lit&lt;Zero&gt;,Lit&lt;Succ&lt;Zero&gt;
+     &gt; &gt;,EmptyEnv&gt; :: result :: value ;
+  
+  assert(y == 1) ;
+</pre>
+
+
+<h2>Code</h2>
+
+<p>
+<a href="http://matt.might.net/articles/c++-template-meta-programming-with-lambda-calculus/code/lambda-calculus-in-templates.cpp">The code is available</a>.
+</p>
+
+
+
+<h2>Resources and related pages</h2>
+
+<ul>
+  <li>
+
+<a href="http://www.amazon.com/gp/product/0201734842?ie=UTF8&amp;tag=ucmbread-20&amp;linkCode=as2&amp;camp=1789&amp;creative=390957&amp;creativeASIN=0201734842">C++ Templates: The Complete Guide</a><img src="./C++ template programming_ Embedding the lambda-calculus to show Turing-completeness_files/ir" width="1" height="1" border="0" alt="" style="border:none !important; margin:0px !important;">
+  
+  is the definitive guide to C++ templates and template meta-programming:
+
+<div class="graphic">
+<a href="http://www.amazon.com/gp/product/0201734842/ref=as_li_ss_il?ie=UTF8&amp;camp=1789&amp;creative=390957&amp;creativeASIN=0201734842&amp;linkCode=as2&amp;tag=ucmbread-20"><img border="0" src="./C++ template programming_ Embedding the lambda-calculus to show Turing-completeness_files/q"></a><img src="./C++ template programming_ Embedding the lambda-calculus to show Turing-completeness_files/ir(1)" width="1" height="1" border="0" alt="" style="border:none !important; margin:0px !important;">
+</div>
+
+
+  It's written by two C++ standards committee members.
+
+  The afternotes in each chapter which mention the proceedings of the standards committee are fascinating.
+
+  In case you're wondering, the Turing-completeness of templates was first an accident, and then a feature.
+  </li>
+  
+  <li>There's <a href="http://www.osl.iu.edu/~kyross/templ-interp.html">another implementation</a> of a lambda-calculus-based language for C++ templates out there.</li>
+
+  <li><a href="http://mitpress.mit.edu/sicp/">Structure and Interpretation of Computer Programs</a>, the classic MIT textbook,
+  covers  eval/apply interpreters in Chapter 4:
+
+  <div class="graphic">
+
+<a href="http://www.amazon.com/gp/product/0262510871/ref=as_li_ss_il?ie=UTF8&amp;camp=1789&amp;creative=390957&amp;creativeASIN=0262510871&amp;linkCode=as2&amp;tag=ucmbread-20"><img border="0" src="./C++ template programming_ Embedding the lambda-calculus to show Turing-completeness_files/q(1)"></a><img src="./C++ template programming_ Embedding the lambda-calculus to show Turing-completeness_files/ir(2)" width="1" height="1" border="0" alt="" style="border:none !important; margin:0px !important;">
+
+  </div>
+   
+  </li>
+
+<script>
+RenderTagLinks("c++") ;
+</script><li><a href="http://matt.might.net/articles/static-closures-in-c-plus-plus/">Self-inlining anonymous closures in C++</a></li><li><a href="http://matt.might.net/articles/self-inlining-anonymous-functions-in-c++/">Self-inlining anonymous functions in C++</a></li><li><a href="http://matt.might.net/articles/lambda-style-anonymous-functions-from-c++-templates/">Lambda-style anonymous functions in C++</a></li>
+
+</ul>
+
+
+<h2>Exercise</h2>
+
+<p> If you would like to practice some of the principles on display in this
+article, I'm providing a challenge problem: implementing addition as a template
+meta-program.  
+</p>
+
+<p>
+The <a href="http://matt.might.net/articles/c++-template-meta-programming-with-lambda-calculus/code/add.cpp">stub code</a> is available.
+</p>
+
+<p> You need to create (two) specializations of the <code>Add</code> struct to
+make it work.  </p>
+
+
+  
+
+ <hr>
+
+ <div id="footer-links">
+ [<a href="http://matt.might.net/articles/">article index</a>]
+ [<script>
+       var emailMatt = '<a href="mai'+'lto:matt-blog'+'@'+'migh'+'t.net">email me</a>'
+document.write(emailMatt);
+ //-->
+</script><a href="mailto:matt-blog@might.net">email me</a>] 
+ [<a href="http://twitter.com/mattmight">@mattmight</a>]
+ [<a href="http://matt.might.net/articles/feed.rss">rss</a>]
+ </div>
+
+
+  
+</div> <!-- /#content -->
+</div><div class="navlinks"><b>Latest:</b> <a href="http://matt.might.net/articles/tenure/">HOWTO: Get tenure</a><br><b>Next:</b> <a href="http://matt.might.net/articles/implementation-of-scheme-vector-struct-in-syntax-rules/">Fast vector-structs in Scheme from syntax-rules</a><br><b>Prev:</b> <a href="http://matt.might.net/articles/implementation-of-lazy-list-streams-in-scala/">Lazy-list-based streams in Scala</a><br><b>Rand:</b> <a href="http://matt.might.net/articles/closure-conversion/">Closure conversion: How to compile lambda </a></div> <!-- /#content-container -->
+
+
+
+
+
+
+<div id="footer-linode" class="module fat-container">
+ <div class="fat-content"> 
+ <center>
+ matt.might.net is powered by <b><a href="http://www.linode.com/?r=bf5d4e7c8a1af61855b5227279a6744c3bde8a8a">linode</a></b> | 
+   <a href="http://matt.might.net/articles/legal/">legal information</a>
+ </center>
+ </div>
+</div>
+
+
+
+
+
+
+</div> <!-- /#body -->
+
+
+
+
+
+
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script><script src="./C++ template programming_ Embedding the lambda-calculus to show Turing-completeness_files/ga.js.下载" type="text/javascript"></script>
+<script type="text/javascript">
+var pageTracker = _gat._getTracker("UA-3661244-1");
+pageTracker._trackPageview();
+</script>
+
+
+
+
+
+
+
+</body></html>
